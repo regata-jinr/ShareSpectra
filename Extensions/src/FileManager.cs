@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Data.SqlClient;
 using System.Linq;
+using Microsoft.EntityFrameworkCore;
 
 namespace Extensions
 {
@@ -12,10 +12,9 @@ namespace Extensions
 
     public static class FileManager
     {
-        public const string ErrorFilePath = @"D:\Spectra\CloudErrors.json";
-
-        public static string ConString = "";
         public static bool   DoesRewrite = true;
+
+        public static TimeSpan ConTimeOut = TimeSpan.FromSeconds(10);
 
         private static IReadOnlyDictionary<string, string> typeID = new Dictionary<string, string> {
             { "SLI-1", "kji"   },
@@ -24,12 +23,16 @@ namespace Extensions
             { "LLI-2", "dji-2" },
         };
 
-        private static void WriteError(SharedError se)
+        private static async Task WriteError(SharingFilesErrors se)
         {
-            if (File.ReadAllText(ErrorFilePath).Contains(Path.GetFileNameWithoutExtension(se.FileSpectra))) return;
+            using (var ic = new InfoContext())
+            {
+                if (ic.UnSharedFiles.Where(u => u.fileS == se.fileS).Any()) return;
 
-            // FIXME: in case of more the one detector in parallel exception will be thrown
-            File.AppendAllLines(ErrorFilePath, new string[] { se.ToString() });
+                var ct = new CancellationTokenSource();
+                ct.CancelAfter(ConTimeOut);
+                await ic.UnSharedFiles.AddAsync(se, ct.Token);
+            }
         }
         
         public static async Task CopyAndUpload(string fileS, string typeI)
@@ -58,7 +61,16 @@ namespace Extensions
             }
             catch (Exception ex)
             {
-                WriteError(new SharedError { FileSpectra = newFile, ErrorMessage = ex.Message }); 
+
+                if (string.IsNullOrEmpty(newFile)) return;
+
+                var sfe = new SharingFilesErrors()
+                {
+                    fileS = Path.GetFileNameWithoutExtension(newFile),
+                    fileSPath = Path.GetDirectoryName(newFile),
+                    ErrorMessage = ex.Message
+                };
+                WriteError(sfe);
             }
         }
 
@@ -66,56 +78,51 @@ namespace Extensions
         {
             try
             {
-                if (string.IsNullOrEmpty(ConString)) throw new InvalidOperationException("Connection string is not specified");
-
                 var ct = new CancellationTokenSource();
-                ct.CancelAfter(TimeSpan.FromSeconds(15));
+                ct.CancelAfter(ConTimeOut);
+
                 var token = "";
                 if (await WebDavClientApi.UploadFile(file, ct.Token))
                     token = await WebDavClientApi.MakeShareable(file, ct.Token);
 
                 if (string.IsNullOrEmpty(token)) throw new InvalidOperationException("File hasn't got token!");
 
-                bool IsExists = false;
-                using (SqlConnection con = new SqlConnection(ConString))
-                {
-                    var query = @"select count(*) from SharedSpectra where fileS = @files";
-                    using (SqlCommand sCmd = new SqlCommand(query, con))
-                    {
-                        sCmd.Parameters.AddWithValue("@files", Path.GetFileNameWithoutExtension(file));
-                        con.Open();
-                        IsExists = ((int)sCmd.ExecuteScalar() != 0);
-                    }
-                }
 
-                if (!DoesRewrite && IsExists) return;
-
-                using (SqlConnection con = new SqlConnection(ConString))
+                var ss = new SharedSpectra()
                 {
-                    var query = @"exec removeSpectra @files";
-                    using (SqlCommand sCmd = new SqlCommand(query, con))
-                    {
-                        sCmd.Parameters.AddWithValue("@files", Path.GetFileNameWithoutExtension(file));
-                        con.Open();
-                        sCmd.ExecuteScalar();
-                    }
-                }
+                    fileS = Path.GetFileNameWithoutExtension(file),
+                    token = token
+                };
 
-                using (SqlConnection con = new SqlConnection(ConString))
+                using (var ic = new InfoContext())
                 {
-                    var query = @"exec addSpectra @files, @token";
-                    using (SqlCommand sCmd = new SqlCommand(query, con))
+                    bool IsExists = ic.SharedSpectra.Where(s => s.fileS == ss.fileS).Any();
+
+                    if (IsExists && DoesRewrite)
                     {
-                        sCmd.Parameters.AddWithValue("@files", Path.GetFileNameWithoutExtension(file));
-                        sCmd.Parameters.AddWithValue("@token", Path.GetFileNameWithoutExtension(token));
-                        con.Open();
-                        sCmd.ExecuteScalar();
+                        ic.SharedSpectra.Update(ss);
+                        return;
                     }
+
+                    var ctn = new CancellationTokenSource();
+                    ctn.CancelAfter(ConTimeOut);
+                    await ic.SharedSpectra.AddAsync(ss, ctn.Token);
+
+                    var sss = await ic.UnSharedFiles.Where(s => s.fileS == ss.fileS).FirstOrDefaultAsync();
+
+                    if (sss != null)
+                        ic.UnSharedFiles.Remove(sss);
                 }
             }
             catch (Exception ex)
             {
-                WriteError(new SharedError { FileSpectra = file, ErrorMessage = ex.Message }); 
+                var sfe = new SharingFilesErrors() 
+                {
+                    fileS = Path.GetFileNameWithoutExtension(file),
+                    fileSPath = Path.GetDirectoryName(file),
+                    ErrorMessage = ex.Message
+                };
+                WriteError(sfe);
             }
             
         }
@@ -134,21 +141,18 @@ namespace Extensions
                 await UploadFilesToCloud(Directory.GetFiles(dir, "*.cnf")); 
         }
 
-        public static async Task UploadFilesFromLog(string logPath)
+        public static async Task ShowFilesWithErrors()
         {
-                await UploadFilesToCloud(File.ReadAllLines(logPath).Select(l => l.Split('\t')[0]).ToArray()); 
+            
         }
-
-        private static void RemoveFileFromLog(string file)
+        public static async Task UploadFilesWithErrors()
         {
-            var fileCont = File.ReadAllLines(ErrorFilePath);
-
-            if (!fileCont.Where(f => f.Contains(file)).Any()) return;
-
-            // FIXME: in case of more the one detector in parallel exception will be thrown
-            File.WriteAllLines(ErrorFilePath, fileCont.Where(f => !f.Contains(file)).ToArray());
+            using (var ic = new InfoContext())
+            {
+                await UploadFilesToCloud(ic.UnSharedFiles.Select(s => s.ToString()).ToArray());
+            }
         }
-
+      
     } // public static class FileManager
 }     // namespace Extensions
 

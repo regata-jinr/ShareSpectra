@@ -1,42 +1,35 @@
 ﻿using System;
-using Microsoft.Extensions.Configuration;
 using System.Net.Mail;
 using System.Net;
+using System.Collections.Generic;
 
 namespace Extensions
 {
-    public class NotificationTool
+    public static class NotificationTool
     {
-        private IConfigurationRoot Configuration { get; set; }
+        public const string RegataMailTarget = "MeasurementsMailHost";
+        public static List<string> Adresses = new List<string>();
 
-        public string ErrorStr { get; private set; }
+        // TODO: make async
 
-        public NotificationTool(string ErrorMessage)
-        {
-            Init(ErrorMessage);
-        }
-        private void Init(string ErrorMessage)
+        public static void SendMessage(string ErrorMessage)
         {
             try
             {
                 if (Environment.MachineName != "NF-105-17") return;
 
-                var builder = new ConfigurationBuilder();
-                builder.AddUserSecrets<NotificationTool>();
+                var cm = AdysTech.CredentialManager.CredentialManager.GetCredentials(RegataMailTarget);
 
-                Configuration = builder.Build();
+                if (cm == null)
+                    throw new ArgumentException("Can't load regata mail credential. Please add it to the windows credential manager");
 
-                var CurrentAppSets = new AppSets();
-                Configuration.GetSection(nameof(AppSets)).Bind(CurrentAppSets);
-
-                if (string.IsNullOrEmpty(CurrentAppSets.Email)) return;
+                if (string.IsNullOrEmpty(cm.Password)) return;
 
                 ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
 
-                var fromAddress = new MailAddress(CurrentAppSets.Email, "Report service");
-                var toAddress = new MailAddress(CurrentAppSets.Email, "");
-                string fromPassword = CurrentAppSets.EmailPassword;
-                string subject = "[Measurements ERROR]Сбой в программе Измерения";
+                var fromAddress = new MailAddress(cm.UserName, "Report service");
+                string fromPassword = cm.Password;
+                string subject = "[Measurements ERROR]Сбой в программе 'Измерения'";
                 string body = $"Во время работы программы измерений произошла ошибка. Текст ошибки:{Environment.NewLine}{ErrorMessage}";
 
                 using (var smtp = new SmtpClient
@@ -49,18 +42,23 @@ namespace Extensions
                     Credentials = new NetworkCredential(fromAddress.Address, fromPassword)
                 })
                 {
-                    using (var message = new MailMessage(fromAddress, toAddress)
+                    foreach (var adress in Adresses)
                     {
-                        Subject = subject,
-                        Body = body
-                    })
-                    {
-                        smtp.Send(message);
+                        var toAddress = new MailAddress(adress, "");
+                        using (var message = new MailMessage(fromAddress, toAddress)
+                        {
+                            Subject = subject,
+                            Body = body
+                        })
+                        {
+                            smtp.Send(message);
+                        }
                     }
                 }
             }
             catch (Exception ex)
-            { ErrorStr = ex.ToString(); }
+            { // write to log? }
+            }
         }
     }
 }

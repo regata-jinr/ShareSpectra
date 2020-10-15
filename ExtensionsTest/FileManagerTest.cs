@@ -8,11 +8,6 @@ namespace ExtensionsTest
     {
         private const string PathBase = @"D:\Spectra\test\2019\05";
 
-        public FileManagerTest()
-        {
-            FileManager.ConString = @"Server=RUMLAB\REGATALOCAL;Database=NAA_DB_TEST;Trusted_Connection=True;";
-        }
-
         [TestMethod]
         public void UploadFileTest()
         {

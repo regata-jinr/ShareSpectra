@@ -27,16 +27,13 @@ namespace Extensions
         static WebDavClientApi()
         {
 
-            var cm = SecretsManager.GetCredential(DiskJinrTarget);
+            var cm = AdysTech.CredentialManager.CredentialManager.GetCredentials(DiskJinrTarget);
 
             if (cm == null)
-            {
-                var e = new ArgumentException("Can't load cloud storage credential. Please add it to the windows credential manager");
-                throw e;
-            }
+               throw new ArgumentException("Can't load cloud storage credential. Please add it to the windows credential manager");
 
             _httpClient = new HttpClient();
-            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Authorization", "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes($"{cm.Name}:{cm.Secret}")));
+            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Authorization", "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes($"{cm.UserName}:{cm.Password}")));
         }
 
         public static async Task<bool> UploadFile(string path, CancellationToken ct)
