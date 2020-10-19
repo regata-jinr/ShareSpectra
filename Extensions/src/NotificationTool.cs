@@ -18,6 +18,8 @@ namespace Extensions
             {
                 if (Environment.MachineName != "NF-105-17") return;
 
+                if (Adresses == null || Adresses.Count == 0) return;
+
                 var cm = AdysTech.CredentialManager.CredentialManager.GetCredentials(RegataMailTarget);
 
                 if (cm == null)

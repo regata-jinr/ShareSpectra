@@ -33,12 +33,11 @@ namespace Extensions
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<SharingFilesErrors>()
-                .HasIndex(c => c.fileS)
-                .IsUnique();
+                .HasKey(c => c.fileS);
 
 
             modelBuilder.Entity<SharedSpectra>()
-                   .HasKey(s => new { s.fileS });
+                   .HasKey(s =>  s.fileS);
         }
     }
 }

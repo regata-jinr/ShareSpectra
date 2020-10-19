@@ -8,13 +8,20 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Extensions
 {
-    //TODO: add tests!
-
     public static class FileManager
     {
         public static bool   DoesRewrite = true;
 
-        public static TimeSpan ConTimeOut = TimeSpan.FromSeconds(10);
+        private static CancellationToken Token { 
+            get
+            {
+                var ct = new CancellationTokenSource();
+                ct.CancelAfter(ConTimeOut);
+                return ct.Token;
+            } 
+        }
+
+        public static TimeSpan ConTimeOut = TimeSpan.FromSeconds(20);
 
         private static IReadOnlyDictionary<string, string> typeID = new Dictionary<string, string> {
             { "SLI-1", "kji"   },
@@ -25,19 +32,26 @@ namespace Extensions
 
         private static async Task WriteError(SharingFilesErrors se)
         {
-            using (var ic = new InfoContext())
+            try
             {
-                if (ic.UnSharedFiles.Where(u => u.fileS == se.fileS).Any()) return;
+                using (var ic = new InfoContext())
+                {
+                    if (ic.UnSharedFiles.Where(u => u.fileS == se.fileS).Any()) return;
 
-                var ct = new CancellationTokenSource();
-                ct.CancelAfter(ConTimeOut);
-                await ic.UnSharedFiles.AddAsync(se, ct.Token);
+                    await ic.UnSharedFiles.AddAsync(se, Token);
+                    await ic.SaveChangesAsync(Token);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw new OperationCanceledException($"Connection timeout for writing error message to DB for file {se}");
             }
         }
         
         public static async Task CopyAndUpload(string fileS, string typeI)
         {
             string newFile = "";
+
             try
             {
                 if (!typeID.ContainsKey(typeI)) return;
@@ -51,6 +65,7 @@ namespace Extensions
                 Directory.CreateDirectory(dir);
 
                 newFile = Path.Combine(dir, Path.GetFileName(fileS));
+
                 File.Copy(fileS, newFile, true);
 
                 if (File.Exists(newFile))
@@ -58,6 +73,10 @@ namespace Extensions
 
                await UploadFileToCloud(newFile);
 
+            }
+            catch (OperationCanceledException oce)
+            {
+                throw oce;
             }
             catch (Exception ex)
             {
@@ -70,7 +89,7 @@ namespace Extensions
                     fileSPath = Path.GetDirectoryName(newFile),
                     ErrorMessage = ex.Message
                 };
-                WriteError(sfe);
+               await WriteError(sfe);
             }
         }
 
@@ -78,12 +97,9 @@ namespace Extensions
         {
             try
             {
-                var ct = new CancellationTokenSource();
-                ct.CancelAfter(ConTimeOut);
-
                 var token = "";
-                if (await WebDavClientApi.UploadFile(file, ct.Token))
-                    token = await WebDavClientApi.MakeShareable(file, ct.Token);
+                if (await WebDavClientApi.UploadFile(file, Token))
+                    token = await WebDavClientApi.MakeShareable(file, Token);
 
                 if (string.IsNullOrEmpty(token)) throw new InvalidOperationException("File hasn't got token!");
 
@@ -101,18 +117,25 @@ namespace Extensions
                     if (IsExists && DoesRewrite)
                     {
                         ic.SharedSpectra.Update(ss);
-                        return;
                     }
+                    else if (!IsExists)
+                    {
+                        await ic.SharedSpectra.AddAsync(ss, Token);
+                    }
+                    else return;
 
-                    var ctn = new CancellationTokenSource();
-                    ctn.CancelAfter(ConTimeOut);
-                    await ic.SharedSpectra.AddAsync(ss, ctn.Token);
-
-                    var sss = await ic.UnSharedFiles.Where(s => s.fileS == ss.fileS).FirstOrDefaultAsync();
+                    var sss = await ic.UnSharedFiles.Where(s => s.fileS == ss.fileS).FirstOrDefaultAsync(Token);
 
                     if (sss != null)
                         ic.UnSharedFiles.Remove(sss);
+
+                    await ic.SaveChangesAsync(Token);
+
                 }
+            }
+            catch (OperationCanceledException)
+            {
+                throw new OperationCanceledException($"Connection timeout while uploading file {file} to cloud");
             }
             catch (Exception ex)
             {
@@ -122,34 +145,45 @@ namespace Extensions
                     fileSPath = Path.GetDirectoryName(file),
                     ErrorMessage = ex.Message
                 };
-                WriteError(sfe);
+               await WriteError(sfe);
             }
-            
         }
 
         public static async Task UploadFilesToCloud(string[] files)
         {
-
             foreach (var f in files)
                 await UploadFileToCloud(f);
-            
         }
 
-        public static async Task UploadFilesFromFolders(string[] folders)
+        public static async Task<List<SharingFilesErrors>> ShowFilesWithErrors()
         {
-            foreach (var dir in folders)
-                await UploadFilesToCloud(Directory.GetFiles(dir, "*.cnf")); 
+            try
+            {
+                using (var ic = new InfoContext())
+                {
+                    return await ic.UnSharedFiles.ToListAsync(Token);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw new OperationCanceledException($"Connection timeout while trying to get files list form errors register");
+            }
         }
 
-        public static async Task ShowFilesWithErrors()
-        {
-            
-        }
         public static async Task UploadFilesWithErrors()
         {
-            using (var ic = new InfoContext())
+            try
             {
-                await UploadFilesToCloud(ic.UnSharedFiles.Select(s => s.ToString()).ToArray());
+                using (var ic = new InfoContext())
+                {
+                    if (!await ic.UnSharedFiles.AnyAsync(Token)) return;
+
+                    await UploadFilesToCloud(await ic.UnSharedFiles.Select(s => s.ToString()).ToArrayAsync(Token));
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw new OperationCanceledException($"Connection timeout while uploading files from errors register");
             }
         }
       

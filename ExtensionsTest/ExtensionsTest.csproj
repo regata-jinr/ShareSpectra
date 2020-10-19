@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>netcoreapp3.1</TargetFramework>
-
+    <PlatformTarget>x86</PlatformTarget>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
@@ -15,6 +15,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Extensions\Extensions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="Interop.CanberraDataAccessLib">
+      <HintPath>..\..\..\GammaSpectrumInfo\Core\libs\Interop.CanberraDataAccessLib.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
 </Project>

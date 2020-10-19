@@ -26,7 +26,6 @@ namespace Extensions
 
         static WebDavClientApi()
         {
-
             var cm = AdysTech.CredentialManager.CredentialManager.GetCredentials(DiskJinrTarget);
 
             if (cm == null)
@@ -34,6 +33,14 @@ namespace Extensions
 
             _httpClient = new HttpClient();
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Authorization", "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes($"{cm.UserName}:{cm.Password}")));
+        }
+
+        public static async Task<bool> RemoveFile(string path, CancellationToken ct)
+        {
+            if (! await IsExists(path, ct)) return true;
+            var response = await _httpClient.DeleteAsync($"{_hostBase}{_hostWebDavAPI}/{path.Substring(Path.GetPathRoot(path).Length)}", ct).ConfigureAwait(false);
+
+            return IsSuccessfull(await response.Content.ReadAsStringAsync());
         }
 
         public static async Task<bool> UploadFile(string path, CancellationToken ct)
@@ -64,7 +71,7 @@ namespace Extensions
             }
         }
 
-        public static async Task<bool> IsFolderExists(string path, CancellationToken ct)
+        public static async Task<bool> IsExists(string path, CancellationToken ct)
         {
             var response = await Send(new Uri($"{_hostBase}{_hostWebDavAPI}/{path.Substring(Path.GetPathRoot(path).Length)}"), new HttpMethod("PROPFIND"), ct);
             return IsSuccessfull(await response.Content.ReadAsStringAsync());
@@ -77,7 +84,7 @@ namespace Extensions
             foreach (var node in dir.Split(Path.DirectorySeparatorChar))
             {
                 subPath = $"{subPath}/{node}";
-                if (!await IsFolderExists(subPath, ct))
+                if (!await IsExists(subPath, ct))
                 {
                     var response = await Send(new Uri($"{_hostBase}{_hostWebDavAPI}{subPath}"), new HttpMethod("MKCOL"), ct);
                     await response.Content.ReadAsStringAsync();
