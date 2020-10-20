@@ -12,16 +12,19 @@ namespace Extensions
     {
         public static bool   DoesRewrite = true;
 
+        private static CancellationTokenSource _cts = new CancellationTokenSource();
+
+        public static void CancelLoading()
+        {
+            _cts.Cancel();
+        }
+
         private static CancellationToken Token { 
             get
             {
-                var ct = new CancellationTokenSource();
-                ct.CancelAfter(ConTimeOut);
-                return ct.Token;
+                return _cts.Token;
             } 
         }
-
-        public static TimeSpan ConTimeOut = TimeSpan.FromSeconds(20);
 
         private static IReadOnlyDictionary<string, string> typeID = new Dictionary<string, string> {
             { "SLI-1", "kji"   },
@@ -93,16 +96,19 @@ namespace Extensions
             }
         }
 
-        private static async Task UploadFileToCloud(string file)
+        public static async Task<bool> UploadFileToCloud(string file)
         {
+            var result = false;
             try
             {
                 var token = "";
-                if (await WebDavClientApi.UploadFile(file, Token))
+                result = await WebDavClientApi.UploadFile(file, Token);
+                if (result)
                     token = await WebDavClientApi.MakeShareable(file, Token);
+                else
+                    throw new InvalidOperationException("Can't upload file");
 
                 if (string.IsNullOrEmpty(token)) throw new InvalidOperationException("File hasn't got token!");
-
 
                 var ss = new SharedSpectra()
                 {
@@ -122,7 +128,7 @@ namespace Extensions
                     {
                         await ic.SharedSpectra.AddAsync(ss, Token);
                     }
-                    else return;
+                    else return result;
 
                     var sss = await ic.UnSharedFiles.Where(s => s.fileS == ss.fileS).FirstOrDefaultAsync(Token);
 
@@ -130,7 +136,7 @@ namespace Extensions
                         ic.UnSharedFiles.Remove(sss);
 
                     await ic.SaveChangesAsync(Token);
-
+                    return result;
                 }
             }
             catch (OperationCanceledException)
@@ -146,6 +152,7 @@ namespace Extensions
                     ErrorMessage = ex.Message
                 };
                await WriteError(sfe);
+                return result;
             }
         }
 

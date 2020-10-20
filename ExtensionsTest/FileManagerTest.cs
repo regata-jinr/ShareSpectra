@@ -43,7 +43,7 @@ namespace ExtensionsTest
         public async Task UploadFileTest()
         {
             var ct = new CancellationTokenSource();
-            ct.CancelAfter(FileManager.ConTimeOut);
+            ct.CancelAfter(TimeSpan.FromSeconds(10));
             await FileManager.CopyAndUpload(_sliFiles[0], "SLI-2");
 
             var nf = MatchDir(Path.GetFileName(_sliFiles[0]), "kji");
@@ -61,7 +61,7 @@ namespace ExtensionsTest
                 await FileManager.CopyAndUpload(f, "LLI-1");
 
                 var nf = MatchDir(Path.GetFileName(f), "dji-1");
-                ct.CancelAfter(FileManager.ConTimeOut);
+                ct.CancelAfter(TimeSpan.FromSeconds(10));
                 Assert.IsTrue(await WebDavClientApi.IsExists(nf, ct.Token));
                 Assert.IsTrue(await WebDavClientApi.RemoveFile(nf, ct.Token));
                 Assert.IsFalse(await WebDavClientApi.IsExists(nf, ct.Token));

@@ -17,7 +17,7 @@ namespace Extensions
             conStr = @"Server = RUMLAB\REGATALOCAL; Database = NAA_DB_TEST; Trusted_Connection = True";
 
 #else
-            if (Environment.MachineName != "NF-105-17") return;
+            // if (Environment.MachineName != "NF-105-17") return;
 
             var cm = AdysTech.CredentialManager.CredentialManager.GetCredentials(RegataDBTarget);
 
