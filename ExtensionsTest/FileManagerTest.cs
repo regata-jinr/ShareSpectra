@@ -75,6 +75,7 @@ namespace ExtensionsTest
             try
             {
                 var cf = _sliFiles[0];
+                await FileManager.CopyAndUpload(cf, "SLI-2");
 
                 // make file busy
                 spec.Open(cf,OpenMode.dReadWrite);

@@ -2,21 +2,28 @@
 using System.Net.Mail;
 using System.Net;
 using System.Collections.Generic;
+using System.IO;
 
 namespace Extensions
 {
     public static class NotificationTool
     {
-        public const string RegataMailTarget = "MeasurementsMailHost";
-        public static List<string> Adresses = new List<string>();
+        public const string RegataMailTarget = "RegataMail";
+        public static List<string> Adresses;
+        public static bool IsAlreadySend = false;
 
-        // TODO: make async
+        static NotificationTool()
+        {
+            Adresses = new List<string>();
+            if (File.Exists("emails.txt"))
+                Adresses.AddRange(File.ReadAllLines("emails.txt"));
+        }
 
         public static void SendMessage(string ErrorMessage)
         {
             try
             {
-                if (Environment.MachineName != "NF-105-17") return;
+                if (IsAlreadySend) return;
 
                 if (Adresses == null || Adresses.Count == 0) return;
 
@@ -29,14 +36,14 @@ namespace Extensions
 
                 ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
 
-                var fromAddress = new MailAddress(cm.UserName, "Report service");
+                var fromAddress = new MailAddress(cm.UserName, "Regata report service");
                 string fromPassword = cm.Password;
                 string subject = "[Measurements ERROR]Сбой в программе 'Измерения'";
                 string body = $"Во время работы программы измерений произошла ошибка. Текст ошибки:{Environment.NewLine}{ErrorMessage}";
 
                 using (var smtp = new SmtpClient
                 {
-                    Host = "smtp.gmail.com",
+                    Host = "mail.jinr.ru",
                     Port = 587,
                     EnableSsl = true,
                     DeliveryMethod = SmtpDeliveryMethod.Network,
@@ -57,9 +64,11 @@ namespace Extensions
                         }
                     }
                 }
+                IsAlreadySend = true;
             }
             catch (Exception ex)
-            { // write to log? }
+            {
+                throw ex;
             }
         }
     }

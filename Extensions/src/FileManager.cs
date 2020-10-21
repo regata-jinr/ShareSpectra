@@ -66,15 +66,23 @@ namespace Extensions
                                        typeI);
 
                 Directory.CreateDirectory(dir);
-
+                var isDuplicate = false;
                 newFile = Path.Combine(dir, Path.GetFileName(fileS));
 
-                File.Copy(fileS, newFile, true);
-
                 if (File.Exists(newFile))
+                {
+                    File.Copy(fileS, Path.Combine(dir, $"{Path.GetFileNameWithoutExtension(fileS)}_{DateTime.Now.ToString("ddMMyyyy_HHmmss")}.cnf"), false);
+                    //throw new FileLoadException($"File '{newFile}' already exists! It has been saved with new unique name. Please, provide correct initial names for spectras.");
+                    isDuplicate = true;
+                }
+                else
+                {
+                    File.Copy(fileS, newFile);
                     File.Delete(fileS);
+                }
 
-               await UploadFileToCloud(newFile);
+                if (!isDuplicate)
+                    await UploadFileToCloud(newFile);
 
             }
             catch (OperationCanceledException oce)
