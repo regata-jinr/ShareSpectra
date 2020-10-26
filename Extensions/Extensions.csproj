@@ -3,15 +3,10 @@
 
   <PropertyGroup>
     <OutputType>library</OutputType>
-    <TargetFramework>netstandard2.0</TargetFramework>
-    <UserSecretsId>83C6E039-093A-436D-8318-1E0970AA626A</UserSecretsId>
+    <TargetFramework>net48</TargetFramework>
   </PropertyGroup>
 
-  <ItemGroup>
-    <DotNetCliToolReference Include="Microsoft.Extensions.SecretManager.Tools" Version="2.0.0" />
-  </ItemGroup>
-
-  <ItemGroup>
+    <ItemGroup>
     <PackageReference Include="AdysTech.CredentialManager" Version="2.2.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="3.1.9" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="3.1.9" />

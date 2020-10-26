@@ -5,7 +5,6 @@ namespace Extensions
 {
     public class InfoContext : DbContext
     {
-        public DbSet<SharingFilesErrors> UnSharedFiles { get; set; }
         public DbSet<SharedSpectra> SharedSpectra { get; set; }
 
         public const string RegataDBTarget = "MeasurementsTempConnectionString";
@@ -32,10 +31,6 @@ namespace Extensions
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            modelBuilder.Entity<SharingFilesErrors>()
-                .HasKey(c => c.fileS);
-
-
             modelBuilder.Entity<SharedSpectra>()
                    .HasKey(s =>  s.fileS);
         }
